@@ -13,5 +13,7 @@ A convienient feature for the conversion of JSON output files to Excel files is 
 Prerequisite python packages are pyopenms, matplotlib, pandas and openpyxl.
 
 The main functionality in this tool is derived from pyOpenMS!
+
 https://www.openms.de/
+
 https://github.com/OpenMS/OpenMS
