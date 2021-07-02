@@ -1,6 +1,7 @@
 import tkinter as tk
+from tkinter.constants import DISABLED
 from tkinter.scrolledtext import *
-from tkinter import ttk
+from tkinter import StringVar, ttk
 from tkinter import filedialog as fd
 from pyopenms import *
 import json
@@ -9,52 +10,56 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 output_directory = ''
+mzMLFiles = []
 
 def open_masses():
     filename = fd.askopenfilename(filetypes=[('Text files', '*.txt')])
     with open(filename,'r') as f:
         massesText.delete('1.0','end')
         massesText.insert('end',f.read())
-        logText.insert('end','Opened mass file: '+filename+'\n')
-        logText.yview('end')
+        print('Opened mass file: '+filename)
 
 def save_masses():
     filename = fd.asksaveasfilename(filetypes=[('Text files', '*.txt')])
-    with open(filename, 'w') as f:
-        f.write(massesText.get('1.0','end'))
-        logText.insert('end','Saved mass file: '+filename+'\n')
-        logText.yview('end')
-        
+    if filename != '':
+        with open(filename, 'w') as f:
+            f.write(massesText.get('1.0','end'))
+            print('Saved mass file: '+filename)
 
 def open_mzML():
     filenames = fd.askopenfilenames(filetypes=[('mzML Files', '*.mzML')])
-    for filename in filenames:
-        mzMLFilesText.insert('end',filename+'\n')
+    global mzMLFiles
+    mzMLFiles += filenames
+    mzMLFilesText.config(state='normal')
+    mzMLFilesText.delete('1.0','end')
+    mzMLFilesText.insert('end','\n'.join(mzMLFiles))
+    mzMLFilesText.config(state='disabled')
 
+def clear_mzML_files():
+    mzMLFilesText.config(state='normal')
+    mzMLFilesText.delete('1.0','end')
+    mzMLFilesText.config(state='disabled')
+    global mzMLFiles
+    mzMLFiles = []
+    
 def select_output_directory():
     global output_directory 
     output_directory = fd.askdirectory()
-    logText.insert('end','Selected output directory: '+output_directory+'\n')
-    logText.yview('end')
+    print('Selected output directory: '+output_directory)
 
 def extract_chromatograms():
     if output_directory == '':
-        logText.insert('end','ERROR: Select an output directory!'+'\n')
-        logText.yview('end')
+        print('ERROR: Select an output directory!')
         return
 
-    inputfiles = [inputfile for inputfile in mzMLFilesText.get('1.0','end').split('\n') if inputfile != '']
     masses = set([float(mass) for mass in massesText.get('1.0','end').split('\n') if mass != ''])
     extraction_window = float(extractionWindowText.get())
 
-    for inputfile in inputfiles:
-        logText.insert('end','Loading MS experiment '+os.path.basename(inputfile)+' ...'+'\n')
-        logText.yview('end')
+    print('Loading MS experiments. This may take a while...')
+    for inputfile in mzMLFiles:
+        print('Loading '+inputfile+' ...')
         exp = MSExperiment()
         MzMLFile().load(inputfile, exp)
-
-        logText.insert('end','Extracting chromatograms...'+'\n')
-        logText.yview('end')
 
         result = {'BPC':{'rt':[],'i':[]}, 'EIC':[]}
         
@@ -80,34 +85,34 @@ def extract_chromatograms():
 
         with open(os.path.join(output_directory,os.path.basename(inputfile)[:-4]+'json'), 'w') as f:
             json.dump(result, f, indent=4)
-            logText.insert('end','SUCCESS: Saved EICs from '+os.path.basename(inputfile)+'\n')
-            logText.yview('end')
+            print('SUCCESS: Saved EICs from '+os.path.basename(inputfile))
 
-    logText.insert('end','SUCCESS: Extracted Chromatograms from all mzML files!'+'\n')
-    logText.yview('end')
+    print('SUCCESS: Extracted Chromatograms from all mzML files!')
 
 def view_chromatograms():
-    logText.insert('end','Viewing chromatograms...'+'\n')
-    logText.yview('end')
+    print('Plotting chromatograms...')
     if os.path.isdir(output_directory):
         filenames = [filename for filename in os.listdir(output_directory) if filename.endswith('.json')]
         for filename in filenames:
             with open(os.path.join(output_directory, filename),'r') as f:
                 data = json.load(f)
-            plt.plot(data['BPC']['rt'],data['BPC']['i'],label='BPC', color='#DDDDDD')
+            f, ax = plt.subplots()
+            ax.plot(data['BPC']['rt'],data['BPC']['i'],label='BPC', color='#DDDDDD')
+            ax1 = ax.twinx()
             for eic in data['EIC']:
-                plt.plot(eic['rt'],eic['i'],label=eic['mass'])
-            plt.legend()
-            plt.ylabel('intensity (cps)')
-            plt.xlabel('time (s)')
-            plt.title(os.path.basename(filename)[:-5])
-            plt.ticklabel_format(axis='y',style='sci',scilimits=(0,0),useMathText=True)
+                ax1.plot(eic['rt'],eic['i'],label=eic['mass'])
+            ax1.legend(loc='upper right')
+            ax.set_ylabel('BPC intensity (cps)')
+            ax1.set_ylabel('EIC intensity (cps)')
+            ax.set_xlabel('time (s)')
+            ax.set_title(os.path.basename(filename)[:-5])
+            ax.ticklabel_format(axis='y',style='sci',scilimits=(0,0),useMathText=True)
+            ax1.ticklabel_format(axis='y',style='sci',scilimits=(0,0),useMathText=True)
             plt.show()
     else:
         logText.insert('end','No files in output directory. Perhaps you need to select a directory first?'+'\n')
         logText.yview('end')
-    logText.insert('end','SUCCESS: All Chromatograms have been plotted!'+'\n')
-    logText.yview('end')    
+    print('SUCCESS: All Chromatograms have been plotted!')   
 
 def convert_output_to_excel():
     if tk.messagebox.askokcancel(title='Warning!', message='''This will convert all JSON output files to excel file format.
@@ -122,7 +127,8 @@ def convert_output_to_excel():
                 with open(os.path.join(output_directory, filename),'r') as f:
                     data = json.load(f)                
                 df = pd.DataFrame()
-                df['time'] = data['BPC']['rt']
+                df['time (s)'] = data['BPC']['rt']
+                df['BPC'] = data['BPC']['i']
                 for eic in data['EIC']:
                     df[eic['mass']] = eic['i']
                 df.to_excel(os.path.join(output_directory, filename[:-4]+'xlsx'), index=False)
@@ -131,50 +137,50 @@ def convert_output_to_excel():
         logText.yview('end')
 
 root = tk.Tk(className='Ion Chromatogram Extractor')
-root.geometry('1000x600')
+root.geometry('1000x350')
 
 massesLabel = tk.Label(text="exact masses")
-massesLabel.place(x = 10, y = 2)
+massesLabel.place(x = 8, y = 2)
 massesText = tk.Text()
-massesText.place(x = 5, y = 20, height = 490, width = 100)
+massesText.place(x = 5, y = 20, height = 330, width = 100)
 
 mzMLFilesLabel = tk.Label(text='mzML files')
 mzMLFilesLabel.place(x = 520, y = 2)
 mzMLFilesText = tk.Text()
+mzMLFilesText.config(state='disabled')
 mzMLFilesText.place(x = 110, y = 20, height = 235, width = 885)
 
-logLabel = tk.Label(text="log")
-logLabel.place(x = 520, y = 255)
-logText = ScrolledText()
-logText.place(x = 110, y = 275, height = 235, width = 885)
 
 openMassesButton = tk.Button(text='Open Masses', command=open_masses)
-openMassesButton.place(x = 10, y = 520)
+openMassesButton.place(x = 110, y = 270)
 
 saveMassesButton = tk.Button(text='Save Masses', command=save_masses)
-saveMassesButton.place(x = 10, y = 560)
+saveMassesButton.place(x = 110, y = 310)
 
-openMassesButton = tk.Button(text='Open mzML Files', command=open_mzML)
-openMassesButton.place(x = 150, y = 520)
+openFilesButton = tk.Button(text='Open mzML Files', command=open_mzML)
+openFilesButton.place(x = 240, y = 270)
 
-openMassesButton = tk.Button(text='Select Output Directory', command=select_output_directory)
-openMassesButton.place(x = 320, y = 520)
+clearFilesButton = tk.Button(text='Clear mzML Files', command=clear_mzML_files)
+clearFilesButton.place(x = 240, y = 310)
 
-openMassesButton = tk.Button(text='Convert Output Files to Excel', command=convert_output_to_excel)
-openMassesButton.place(x = 320, y = 560)
+selectOutputButton = tk.Button(text='Select Output Directory', command=select_output_directory)
+selectOutputButton.place(x = 440, y = 270)
 
-openMassesButton = tk.Button(text='Extract Chromatograms', command=extract_chromatograms)
-openMassesButton.place(x = 800, y = 520)
+convertButton = tk.Button(text='Convert Output Files to Excel', command=convert_output_to_excel)
+convertButton.place(x = 440, y = 310)
 
-openMassesButton = tk.Button(text='View Chromatograms', command=view_chromatograms)
-openMassesButton.place(x = 807, y = 560)
+extractButton = tk.Button(text='Extract Chromatograms', command=extract_chromatograms)
+extractButton.place(x = 800, y = 270)
+
+viewButton = tk.Button(text='View Chromatograms', command=view_chromatograms)
+viewButton.place(x = 807, y = 310)
 
 extractionWindowLabel = tk.Label(text='extraction\nwindow') 
-extractionWindowLabel.place(x = 690, y = 520)
+extractionWindowLabel.place(x = 690, y = 270)
 extractionWindowLabel1 = tk.Label(text='m/z')
-extractionWindowLabel1.place(x = 750, y = 560)
+extractionWindowLabel1.place(x = 750, y = 310)
 extractionWindowText = tk.Entry()
-extractionWindowText.place(x = 700, y = 560,width=50)
+extractionWindowText.place(x = 700, y = 310,width=50)
 extractionWindowText.insert('end','0.02')
 
 tk.mainloop()
