@@ -119,8 +119,6 @@ def convert_output_to_excel():
                                                 You will not be able to view your plots afterwards.
                                                 
                                                 Do you wish to proceed?'''):
-        logText.insert('end','Converting output files to excel file format...'+'\n')
-        logText.yview('end')
         if os.path.isdir(output_directory):
             filenames = [filename for filename in os.listdir(output_directory) if filename.endswith('.json')]
             for filename in filenames:
