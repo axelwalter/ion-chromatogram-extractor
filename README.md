@@ -2,7 +2,8 @@
 Extract ion chromatograms from a mzML file using pyOpenMS and store retention time and intensity values.
 
 A list of exact masses for extraction can be loaded from a .txt file or entered directly, which a single mass
-in each line. A basepeak chromatogram (BPC) will always be calculated. The mass list can be stored for later use
+in each line. Optionally a name for the EIC can be specified (e.g. 181.0707 = glucose). 
+A basepeak chromatogram (BPC) will always be calculated. The mass list can be stored for later use
 in a text file.
 The sample (mzML file) path names need to be specified each in a separate line.
 An output directory needs to be selected. Here the results will be stored in JSON format with a single file for each
